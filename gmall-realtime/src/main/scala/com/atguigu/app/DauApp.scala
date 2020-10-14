@@ -7,7 +7,7 @@ import com.alibaba.fastjson.JSON
 import com.atguigu.bean.StartUpLog
 import com.atguigu.constants.GmallConstant
 import com.atguigu.handler.DauHandler
-import com.atguigu.utils.MyKafkaUtil
+import com.atguigu.utils.{MyKafkaUtil, PropertiesUtil}
 import org.apache.hadoop.conf.Configuration
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.spark.SparkConf
@@ -69,10 +69,11 @@ object DauApp {
 
     //8.将去重之后的数据明细写入Phoenix
     filterByMidLogDStream.foreachRDD { rdd =>
-      rdd.saveToPhoenix("GMALL200523_DAU",
-        Seq("MID", "UID", "APPID", "AREA", "OS", "CH", "TYPE", "VS", "LOGDATE", "LOGHOUR", "TS"),
+      rdd.saveToPhoenix(PropertiesUtil.load("config.properties").getProperty("phoenix.dau.table"),
+        //        Seq("MID", "UID", "APPID", "AREA", "OS", "CH", "TYPE", "VS", "LOGDATE", "LOGHOUR", "TS"),
+        classOf[StartUpLog].getDeclaredFields.map(_.getName.toUpperCase()),
         new Configuration,
-        Some("hadoop102,hadoop103,hadoop104:2181"))
+        Some(PropertiesUtil.load("config.properties").getProperty("phoenix.zk.url")))
     }
 
     //9.启动任务
