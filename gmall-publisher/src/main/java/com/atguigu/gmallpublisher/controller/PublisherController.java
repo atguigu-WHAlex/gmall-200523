@@ -40,28 +40,45 @@ public class PublisherController {
         newMidMap.put("name", "新增设备");
         newMidMap.put("value", 233);
 
-        //将map放入集合
+        //5.创建交易额Map并赋值
+        HashMap<String, Object> gmvMap = new HashMap<>();
+        gmvMap.put("id", "order_amount");
+        gmvMap.put("name", "新增交易额");
+        gmvMap.put("value", publisherService.getOrderAmount(date));
+
+        //6.将map放入集合
         result.add(dauMap);
         result.add(newMidMap);
+        result.add(gmvMap);
 
-        //返回结果
+        //7.返回结果
         return JSON.toJSONString(result);
     }
 
     @RequestMapping("realtime-hours")
     public String getRealTimeHours(@RequestParam("id") String id, @RequestParam("date") String date) {
 
-        //1.创建Map用于存放最终结果
+        //创建Map用于存放最终结果
         HashMap<String, Map> result = new HashMap<>();
-
-        //2.查询今天的分时数据
-        Map todayMap = publisherService.getDauHourTotal(date);
-
-        //3.查询昨天的分时数据
         String yesterday = LocalDate.parse(date).plusDays(-1).toString();
-        Map yesterdayMap = publisherService.getDauHourTotal(yesterday);
 
-        //4.将今天以及昨天的分时数据放入result
+        Map todayMap = null;
+        Map yesterdayMap = null;
+
+        //判断访问的具体数据(dau,new_mid,order_amount)
+        if ("dau".equals(id)) {
+            //查询今天的分时数据
+            todayMap = publisherService.getDauHourTotal(date);
+            //查询昨天的分时数据
+            yesterdayMap = publisherService.getDauHourTotal(yesterday);
+
+        } else if ("order_amount".equals(id)) {
+            //查询今天的分时数据
+            todayMap = publisherService.getOrderAmountHour(date);
+            //查询昨天的分时数据
+            yesterdayMap = publisherService.getOrderAmountHour(yesterday);
+        }
+
         result.put("yesterday", yesterdayMap);
         result.put("today", todayMap);
 
