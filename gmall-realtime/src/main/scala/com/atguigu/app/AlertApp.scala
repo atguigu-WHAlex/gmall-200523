@@ -45,16 +45,15 @@ object AlertApp {
       eventLog
     })
 
-    //5.按照mid分组
-    val midToLogIter: DStream[(String, Iterable[EventLog])] = eventLogDStream.map(eventLog => (eventLog.mid, eventLog))
+    //5.开窗,5min的窗口,按照mid分组
+    val windowDStream: DStream[(String, Iterable[EventLog])] = eventLogDStream
+      .window(Minutes(5))
+      .map(eventLog => (eventLog.mid, eventLog))
       .groupByKey()
 
-    //6.开窗,5min的窗口
-    val windowDStream: DStream[(String, Iterable[EventLog])] = midToLogIter.window(Minutes(5))
-
-    //7.窗口内部做数据分析
-    //    三次及以上用不同账号:登陆过的uid个数 >= 3
-    //    没有浏览商品:反向考虑,只要有浏览行为,则不产生预警日志
+    //6.窗口内部做数据分析
+    //三次及以上用不同账号:登陆过的uid个数 >= 3
+    //没有浏览商品:反向考虑,只要有浏览行为,则不产生预警日志
     val boolToAlertInfo: DStream[(Boolean, CouponAlertInfo)] = windowDStream.map { case (mid, iter) =>
 
       //创建HashSet用于存放uid
@@ -88,13 +87,13 @@ object AlertApp {
 
     }
 
-    //8.产生预警日志
+    //7.产生预警日志
     val alertInfoDStream: DStream[CouponAlertInfo] = boolToAlertInfo.filter(_._1).map(_._2)
 
     alertInfoDStream.cache()
     alertInfoDStream.count().print()
 
-    //9.写入ES
+    //8.写入ES
     val format = new SimpleDateFormat("yyyy-MM-dd")
     val format2 = new SimpleDateFormat("yyyy-MM-dd HH:mm")
     alertInfoDStream.foreachRDD(rdd => {
@@ -114,7 +113,7 @@ object AlertApp {
       })
     })
 
-    //10.开启任务
+    //9.开启任务
     ssc.start()
     ssc.awaitTermination()
 

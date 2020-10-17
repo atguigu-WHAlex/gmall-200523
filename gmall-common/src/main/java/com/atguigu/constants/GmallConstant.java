@@ -11,4 +11,11 @@ public class GmallConstant {
     //订单数据主题
     public static final String KAFKA_TOPIC_ORDER_INFO = "TOPIC_ORDER_INFO";
 
+    //订单明细数据主题
+    public static final String KAFKA_TOPIC_ORDER_DETAIL = "TOPIC_ORDER_DETAIL";
+
+    //用户数据主题
+    public static final String KAFKA_TOPIC_USER_INFO = "TOPIC_USER_INFO";
+
+
 }
