@@ -1,19 +1,26 @@
 package com.atguigu.app
 
+import java.sql.Connection
+import java.text.SimpleDateFormat
 import java.util
+import java.util.Date
 
 import com.alibaba.fastjson.JSON
-import com.atguigu.bean.{OrderDetail, OrderInfo, SaleDetail}
+import com.atguigu.bean.{OrderDetail, OrderInfo, SaleDetail, UserInfo}
 import com.atguigu.constants.GmallConstant
-import com.atguigu.utils.{MyKafkaUtil, RedisUtil}
+import com.atguigu.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.phoenix.util.JDBCUtil
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.json4s.DefaultFormats
 import redis.clients.jedis.Jedis
+
 import collection.JavaConverters._
 import org.json4s.native.Serialization
+import redis.clients.util.RedisInputStream
+
 import scala.collection.mutable.ListBuffer
 
 object SaleDetailApp {
@@ -128,10 +135,64 @@ object SaleDetailApp {
       details.toIterator
     })
 
-    //6.打印测试
-    noUserSaleDetailDStream.print()
+    //打印测试
+    //    noUserSaleDetailDStream.print()
+    //6.根据userId获取Redis中用户信息,补全信息
+    val saleDetailDStream: DStream[SaleDetail] = noUserSaleDetailDStream.mapPartitions(iter => {
 
-    //7.启动任务
+      //获取Redis连接
+      val jedisClient: Jedis = RedisUtil.getJedisClient
+
+
+      //遍历数据,根据userId获取Redis中用户信息
+      val details: Iterator[SaleDetail] = iter.map(noUserSaleDetail => {
+
+        val userRedisKey = s"UserInfo:${noUserSaleDetail.user_id}"
+
+        if (jedisClient.exists(userRedisKey)) {
+          val userInfoStr: String = jedisClient.get(userRedisKey)
+          val userInfo: UserInfo = JSON.parseObject(userInfoStr, classOf[UserInfo])
+          noUserSaleDetail.mergeUserInfo(userInfo)
+
+        } else {
+          //MySQL
+          val connection: Connection = JdbcUtil.getConnection
+          val userInfoJson: String = {
+            JdbcUtil.getUserInfoFromMysql(connection,
+              "select * from gmall200523.user_info where id =?",
+              Array(noUserSaleDetail.user_id))
+          }
+          val userInfo: UserInfo = JSON.parseObject(userInfoJson, classOf[UserInfo])
+          noUserSaleDetail.mergeUserInfo(userInfo)
+          connection.close()
+        }
+
+        noUserSaleDetail
+      })
+
+      //释放连接
+      jedisClient.close()
+
+
+      //返回数据
+      details
+
+    })
+
+    //7.写入ES
+    val format = new SimpleDateFormat("yyyy-MM-dd")
+    saleDetailDStream.foreachRDD(rdd => {
+
+      rdd.foreachPartition(iter => {
+        //创建索引名 gmall0523_sale_detail-2020-10-19
+        val indexName = s"${PropertiesUtil.load("config.properties").getProperty("es.sale.prefix")}-${format.format(new Date(System.currentTimeMillis()))}"
+        val docList: List[(String, SaleDetail)] = iter.toList.map(saleDetail => (s"${saleDetail.order_id}-${saleDetail.order_detail_id}", saleDetail))
+        MyEsUtil.insertBulk(indexName,docList)
+      })
+
+    })
+
+    //8.启动任务
     ssc.start()
     ssc.awaitTermination()
 

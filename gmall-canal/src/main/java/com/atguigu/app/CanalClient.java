@@ -100,11 +100,11 @@ public class CanalClient {
             for (CanalEntry.Column column : rowData.getAfterColumnsList()) {
                 jsonObject.put(column.getName(), column.getValue());
             }
-            try {
-                Thread.sleep(new Random().nextInt(5) * 1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+//            try {
+//                Thread.sleep(new Random().nextInt(5) * 1000);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
             //打印数据,并将数据发送Kafka
             System.out.println(jsonObject);
             MyKafkaSender.send(topic, jsonObject.toString());
